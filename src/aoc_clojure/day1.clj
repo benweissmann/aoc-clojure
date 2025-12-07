@@ -1,5 +1,7 @@
 (ns aoc-clojure.day1
-  (:require [clojure.string :as string])
+  (:require
+   [clojure.java.io :as io]
+   [clojure.string :as string])
   (:require [clojure.math :as math]))
 
 (defn parse-instruction [instr]
@@ -58,27 +60,27 @@
 
   (solve-part-2 ["L50", "R1", "L1", "L1", "R1"]) ; 1 + 0 + 1 + 0 + 1 = 3
 
-  (let [s (clojure.java.io/resource "day1small.txt")]
-    (with-open [r (clojure.java.io/reader s)]
+  (let [s (io/resource "day1small.txt")]
+    (with-open [r (io/reader s)]
       (solve-part-1 (line-seq r))))
 
 
-  (let [s (clojure.java.io/resource "day1.txt")]
-    (with-open [r (clojure.java.io/reader s)]
+  (let [s (io/resource "day1.txt")]
+    (with-open [r (io/reader s)]
       (solve-part-1 (line-seq r))))
 
 
-  (let [s (clojure.java.io/resource "day1small.txt")]
-    (with-open [r (clojure.java.io/reader s)]
+  (let [s (io/resource "day1small.txt")]
+    (with-open [r (io/reader s)]
       (solve-part-2 (line-seq r))))
 
-  (let [s (clojure.java.io/resource "day1.txt")]
-    (with-open [r (clojure.java.io/reader s)]
+  (let [s (io/resource "day1.txt")]
+    (with-open [r (io/reader s)]
       (partition 2 1 (apply-instructions (line-seq r)))))
 
   :rcf)
 
 
-(let [s (clojure.java.io/resource "day1.txt")]
-  (with-open [r (clojure.java.io/reader s)]
+(let [s (io/resource "day1.txt")]
+  (with-open [r (io/reader s)]
     (solve-part-2 (line-seq r))))
