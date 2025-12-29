@@ -1,7 +1,12 @@
 (ns aoc-clojure.day10
   (:require
    [clojure.java.io :as io]
-   [clojure.string :as string]))
+   [clojure.string :as string])
+  (:import [org.chocosolver.solver Model]
+           [org.chocosolver.solver.variables IntVar]
+           [org.chocosolver.solver.search.strategy Search]
+           [org.chocosolver.solver.search.strategy.strategy AbstractStrategy]))
+
 (defn padded-bin [int width]
   (let [bin (Integer/toBinaryString int)]
     (str
@@ -9,7 +14,7 @@
      (apply str (repeat (- width (count bin)) "0"))
      bin)))
 
-(defrecord Machine [width lights buttons joltages])
+(defrecord Machine [index model width lights buttons button-indexes joltages])
 
 (defmethod print-method Machine [m ^java.io.Writer writer]
   (.write writer
@@ -36,23 +41,35 @@
 (defn parse-buttons [buttons width]
   (vec (map #(parse-button % width) buttons)))
 
+
+; coverts the bitmask representation of a button to a set of indexes
+(defn button-to-indexes [button-bitmask width]
+  (set (filter
+        (fn [idx]
+          (bit-test button-bitmask (- (dec width) idx)))
+        (range width))))
+
 (defn parse-joltages [joltages]
   (vec (map Integer/parseInt
             (string/split
              (subs joltages 1 (-> joltages count dec))
              #","))))
 
-(defn parse-input-line [line]
+(defn parse-input-line [idx line]
   (let [[lights & buttons-and-joltage] (string/split line #" ")
-        width (- (count lights) 2)]
+        width (- (count lights) 2)
+        buttons (parse-buttons (butlast buttons-and-joltage) width)]
     (Machine.
+     idx
+     (Model/new)
      width
      (parse-lights lights)
-     (parse-buttons (butlast buttons-and-joltage) width)
+     buttons
+     (vec (map #(button-to-indexes % width) buttons))
      (parse-joltages (last buttons-and-joltage)))))
 
 (defn parse-input [lines]
-  (vec (map parse-input-line lines)))
+  (vec (map-indexed parse-input-line lines)))
 
 
 ; Generates all bitmasks equal to or less than the given width
@@ -86,12 +103,6 @@
 (defn solve-part-1 [input]
   (reduce + (map #(Integer/bitCount (find-button-bitmask %)) input)))
 
-; coverts the bitmask representation of a button to a set of indexes
-(defn button-to-indexes [button-bitmask width]
-  (set (filter
-        (fn [idx]
-          (bit-test button-bitmask (- (dec width) idx)))
-        (range width))))
 
 ; decrements the joltages in the positions matching the given button
 ; (as an index set)
@@ -120,13 +131,52 @@
                                         (dec presses)))
      buttons) true))
 
-(defn min-buttons-for-joltage [machine]
+(defn min-buttons-for-joltage-slow [machine]
   (let [joltages (:joltages machine)
-        buttons (map #(button-to-indexes % (:width machine)) (:buttons machine))]
+        buttons (:button-indexes machine)]
     (first (filter (fn [depth] (can-satisfy-joltages joltages buttons depth)) (range 100)))))
 
+(defn add-constraint [machine btn-vars idx]
+  (let [joltage (get (:joltages machine) idx)
+        var-btn-indexes (filter
+                         (fn [btn-idx]
+                           (contains? (get (:button-indexes machine) btn-idx) idx))
+                         (range (count btn-vars)))]
+    (if (> (count var-btn-indexes) 0)
+      (.post (.sum (:model machine)
+                   (into-array IntVar (map #(get btn-vars %) var-btn-indexes))
+                   "="
+                   joltage))
+      nil)))
+(defn get-sum-var [machine btn-vars]
+  (let [total-joltage (reduce + (:joltages machine))
+        sum-var (.intVar (:model machine) "totalSum" 0 total-joltage)]
+    (.post (.sum (:model machine)
+                 (into-array IntVar btn-vars)
+                 "="
+                 sum-var))
+    sum-var))
+
+(defn min-buttons-for-joltage-fast [machine]
+  (let [width (:width machine)
+        model (:model machine)
+        btn-count (count (:buttons machine))
+        max-joltage (-> (:joltages machine) sort reverse first)
+        btn-vars (vec (map #(.intVar model (str "btn" %) 0 max-joltage) (range btn-count)))
+        _ (vec (map #(add-constraint machine btn-vars %) (range width)))
+        sum-var (get-sum-var machine btn-vars)
+        ; _ (.setObjective model Model/MINIMIZE sum-var)
+        _ (.setSearch (.getSolver model) (into-array AbstractStrategy (vec [(Search/minDomLBSearch (into-array IntVar btn-vars))])))
+        sln (.findOptimalSolution (.getSolver model) sum-var false nil)]
+    (.getIntVal sln sum-var)))
+
 (defn solve-part-2 [input]
-  (reduce + (pmap min-buttons-for-joltage input)))
+  (reduce + (pmap
+             (fn [machine]
+               (let [sln (min-buttons-for-joltage-fast machine)]
+                 (println (str "Solved " (:index machine) ": " sln))
+                 sln))
+             input)))
 
 (comment
   (println (string/join "\n" (map #(pr-str %) (small-input))))
@@ -145,9 +195,11 @@
 
   (button-to-indexes 2r0111 4)
 
-  (min-buttons-for-joltage (second (small-input)))
+  (min-buttons-for-joltage-slow (first (small-input)))
 
-  (solve-part-2 (small-input))
+  (min-buttons-for-joltage-fast (first (small-input)))
+
+  (solve-part-2 (input))
   :rcf)
 
 
