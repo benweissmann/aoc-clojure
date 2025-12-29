@@ -165,8 +165,6 @@
         btn-vars (vec (map #(.intVar model (str "btn" %) 0 max-joltage) (range btn-count)))
         _ (vec (map #(add-constraint machine btn-vars %) (range width)))
         sum-var (get-sum-var machine btn-vars)
-        ; _ (.setObjective model Model/MINIMIZE sum-var)
-        _ (.setSearch (.getSolver model) (into-array AbstractStrategy (vec [(Search/minDomLBSearch (into-array IntVar btn-vars))])))
         sln (.findOptimalSolution (.getSolver model) sum-var false nil)]
     (.getIntVal sln sum-var)))
 
